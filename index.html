@@ -291,7 +291,7 @@
         <p class="eyebrow">Audit trail</p>
         <h1>Activity</h1>
       </header>
-      <p class="hint" style="margin-top:-20px; margin-bottom:28px;">A permanent, append-only record of changes to this system — nobody, including admins, can edit or delete entries here. Updates live automatically as your group works.</p>
+      <p class="hint" style="margin-top:-20px; margin-bottom:28px;">Activity updates live automatically as your group works. Admin edits and deletions are recorded here.</p>
       <div class="filter-bar activity-filters">
         <div class="filter-search-wrap">
           <svg class="filter-search-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m15.5 15.5 4.2 4.2" /></svg>
@@ -379,6 +379,32 @@
         <button type="submit" class="btn btn-primary" id="submit-pending-link">Add to pending links</button>
       </div>
       <p class="form-status" id="pending-link-status" aria-live="polite"></p>
+    </form>
+  </div>
+</div>
+
+<!-- EDIT ACTIVITY MODAL -->
+<div class="modal-overlay is-hidden" id="activity-edit-overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="activity-edit-title">
+    <div class="modal-head">
+      <h2 id="activity-edit-title">Edit activity</h2>
+      <button type="button" class="modal-close" id="close-activity-edit" aria-label="Close">&times;</button>
+    </div>
+    <form id="activity-edit-form">
+      <label>Activity
+        <input type="text" id="activity-edit-action" required />
+      </label>
+      <label>Details
+        <textarea id="activity-edit-details" rows="3"></textarea>
+      </label>
+      <label>Date and time
+        <input type="datetime-local" id="activity-edit-created-at" required />
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-activity-edit">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="save-activity-edit">Save changes</button>
+      </div>
+      <p class="form-status" id="activity-edit-status" aria-live="polite"></p>
     </form>
   </div>
 </div>

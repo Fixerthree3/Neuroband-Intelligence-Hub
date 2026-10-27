@@ -130,8 +130,7 @@ create table if not exists task_comments (
   created_at timestamptz default now()
 );
 
--- Table: activity_log (append-only audit trail — nothing can
--- update or delete rows here, not even admins, by design)
+-- Table: activity_log (workspace activity history; admins can correct or remove entries)
 create table if not exists activity_log (
   id uuid primary key default gen_random_uuid(),
   actor_email text,
@@ -536,11 +535,8 @@ create policy "Authenticated update on avatars bucket" on storage.objects
 
 -- ------------------------------------------------------------
 -- ACTIVITY LOG: row level security
--- Anyone can read it (transparency). Any signed-in user can add
--- an entry (the app does this automatically). Nobody — not even
--- admins — can update or delete rows: no update/delete policy is
--- defined at all, so Postgres blocks both by default. This makes
--- the audit trail tamper-proof once written.
+-- Approved members can read entries, signed-in users can add them,
+-- and admins can correct or remove entries.
 -- ------------------------------------------------------------
 alter table activity_log enable row level security;
 drop policy if exists "Public read on activity_log" on activity_log;
@@ -669,6 +665,10 @@ drop policy if exists "Authenticated users record activity" on activity_log;
 create policy "Approved members read activity log" on activity_log for select using (is_approved_member());
 create policy "Authenticated users record activity" on activity_log for insert
   with check (auth.role() = 'authenticated');
+create policy "Admin update on activity_log" on activity_log for update
+  using (is_admin()) with check (is_admin());
+create policy "Admin delete on activity_log" on activity_log for delete
+  using (is_admin());
 
 -- ------------------------------------------------------------
 -- REAL-TIME SYNC

@@ -81,6 +81,7 @@ let currentTaskView = "mine";
 let currentUser = null;
 let currentActivity = [];
 let activityLoadError = null;
+let activityBeingEditedId = null;
 let calendarCurrentDate = new Date();
 let myWorkFilter = "all";
 let whatsappLinkPoll = null;
@@ -111,6 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
   wireNotifications();
   wireWhatsAppSettings();
   wireActivityFilters();
+  wireActivityControls();
   populateFormDropdowns();
   loadDocument("collection_plan");
   loadDocument("manual");
@@ -2945,6 +2947,95 @@ function wireActivityFilters(){
   });
 }
 
+function wireActivityControls(){
+  const list = document.getElementById("activity-list");
+  list.addEventListener("click", event => {
+    const editButton = event.target.closest("[data-activity-edit]");
+    const deleteButton = event.target.closest("[data-activity-delete]");
+    if (editButton) openActivityEdit(editButton.dataset.activityEdit);
+    if (deleteButton) deleteActivity(deleteButton.dataset.activityDelete);
+  });
+
+  document.getElementById("close-activity-edit").addEventListener("click", closeActivityEdit);
+  document.getElementById("cancel-activity-edit").addEventListener("click", closeActivityEdit);
+  document.getElementById("activity-edit-overlay").addEventListener("click", event => {
+    if (event.target.id === "activity-edit-overlay") closeActivityEdit();
+  });
+  document.getElementById("activity-edit-form").addEventListener("submit", submitActivityEdit);
+}
+
+function openActivityEdit(activityId){
+  if (!isAdminEmail(currentUser?.email)) return;
+  const activity = currentActivity.find(item => String(item.id) === String(activityId));
+  if (!activity) return;
+  activityBeingEditedId = activity.id;
+  document.getElementById("activity-edit-action").value = activity.action || "";
+  document.getElementById("activity-edit-details").value = activity.details || "";
+  const date = new Date(activity.created_at);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  document.getElementById("activity-edit-created-at").value = date.toISOString().slice(0, 16);
+  document.getElementById("activity-edit-status").textContent = "";
+  document.getElementById("activity-edit-status").className = "form-status";
+  document.getElementById("activity-edit-overlay").classList.remove("is-hidden");
+}
+
+function closeActivityEdit(){
+  document.getElementById("activity-edit-overlay").classList.add("is-hidden");
+  document.getElementById("activity-edit-form").reset();
+  document.getElementById("activity-edit-status").textContent = "";
+  document.getElementById("activity-edit-status").className = "form-status";
+  activityBeingEditedId = null;
+}
+
+async function submitActivityEdit(event){
+  event.preventDefault();
+  if (!isAdminEmail(currentUser?.email) || !activityBeingEditedId) return;
+  const activity = currentActivity.find(item => String(item.id) === String(activityBeingEditedId));
+  if (!activity) return closeActivityEdit();
+  const action = document.getElementById("activity-edit-action").value.trim();
+  const details = document.getElementById("activity-edit-details").value.trim();
+  const createdAt = new Date(document.getElementById("activity-edit-created-at").value);
+  const status = document.getElementById("activity-edit-status");
+  const submitButton = document.getElementById("save-activity-edit");
+  if (!action || Number.isNaN(createdAt.getTime())) {
+    status.textContent = "Enter an activity and a valid date and time.";
+    status.className = "form-status is-error";
+    return;
+  }
+  submitButton.disabled = true;
+  try {
+    const { data, error } = await sbClient.from("activity_log")
+      .update({ action, details: details || null, created_at: createdAt.toISOString() })
+      .eq("id", activity.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    closeActivityEdit();
+    upsertActivityInView(data);
+    await logActivity("edited an activity entry", `${activity.id}: ${activity.action}`);
+  } catch (error) {
+    status.textContent = `Could not update activity: ${error.message}`;
+    status.className = "form-status is-error";
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function deleteActivity(activityId){
+  if (!isAdminEmail(currentUser?.email)) return;
+  const activity = currentActivity.find(item => String(item.id) === String(activityId));
+  if (!activity || !confirm(`Delete this activity entry?\n\n${activity.action}${activity.details ? ` — ${activity.details}` : ""}`)) return;
+  const { error } = await sbClient.from("activity_log").delete().eq("id", activity.id);
+  if (error) {
+    alert(`Could not delete activity: ${error.message}`);
+    return;
+  }
+  currentActivity = currentActivity.filter(item => String(item.id) !== String(activity.id));
+  populateActivityFilters();
+  renderActivity();
+  await logActivity("deleted an activity entry", `${activity.id}: ${activity.action}${activity.details ? ` — ${activity.details}` : ""}`);
+}
+
 function populateActivityFilters(){
   const userFilter = document.getElementById("activity-filter-user");
   const actionFilter = document.getElementById("activity-filter-action");
@@ -3056,6 +3147,7 @@ function renderActivity(){
             <div class="activity-line">${escapeHtml(a.action)}${a.details ? ` — ${escapeHtml(a.details)}` : ""}</div>
             <div class="activity-time">${relativeTime(a.created_at)}</div>
           </div>
+          ${isAdminEmail(currentUser?.email) ? `<div class="activity-actions"><button type="button" class="btn btn-ghost btn-small" data-activity-edit="${escapeHtml(a.id)}" aria-label="Edit activity">Edit</button><button type="button" class="btn btn-ghost btn-small activity-delete" data-activity-delete="${escapeHtml(a.id)}" aria-label="Delete activity">Delete</button></div>` : ""}
         `;
         authorGroup.appendChild(item);
       });
